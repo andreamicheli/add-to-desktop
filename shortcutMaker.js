@@ -6,6 +6,8 @@ const AppDisplay = imports.ui.appDisplay;
 const PopupMenu = imports.ui.popupMenu;
 const Gettext = imports.gettext;
 const Config = imports.misc.config;
+const Utils = Me.imports.utils;
+
 Gettext.textdomain(Config.GETTEXT_PACKAGE); // use 'gnome-shell' as default domain
 const shell_gettext = Gettext.gettext;
 Gettext.bindtextdomain( 'add-to-desktop', Me.dir.get_child('locale').get_path());
@@ -67,7 +69,7 @@ function insertAddToDesktopButton(menu) {
     });
 }
 
-
+// A shortcut maker is an object that I can use to create many new shortcuts by calling makeShortcut for each one
 var ShortcutMaker = class ShortcutMaker {
     constructor() {
         this._desktop = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DESKTOP);
@@ -109,20 +111,15 @@ var ShortcutMaker = class ShortcutMaker {
             });
     }
 
-    // mark as trusted to allow launching
-    _setMetadata() {
-        let proc = new Gio.Subprocess({argv: ['gio', 'set', this._copyPath, 'metadata::trusted', 'true']});
-        proc.init(null);
-        proc.wait_check_async(null,
-            (source, result) => {
-                try {
-                    source.wait_check_finish(result);
-                    this._setExecutableBit();
-                } catch(e) {
-                    log(`Failed to allow launching: ${e.message}`);
-                }
-            });
-        //TODO: metadata::shortcut-of
+    async _setMetadata() {
+        try {
+            // Gio APis don't work with metadata attributes so I have to use command line interface
+            await Utils.execCommand(['gio', 'set', this._copyPath, 'metadata::trusted', 'true']);  // mark as trusted to allow launching
+            await Utils.execCommand(['gio', 'set', this._copyPath, 'metadata::shortcut-of', this._appPath]);  // mark as shortcut to allow automatic repair
+            this._setExecutableBit();
+        } catch(e) {
+            log(`Failed to set metadata: ${e.message}`);
+        }
     }
 
     // set executable bit last because this call refresh in desktop icon extension
